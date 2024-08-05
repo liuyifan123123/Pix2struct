@@ -17,9 +17,9 @@
 import math
 from typing import Dict, List, Optional, Tuple, Union
 import mindspore
-from mindnlp.mindnlp.core import nn,ops
-from mindnlp.mindnlp.core.nn import functional as f
-from mindnlp.mindnlp.core.nn import BCEWithLogitsLoss,CrossEntropyLoss,MSELoss
+
+from mindnlp.mindnlp.core import nn,ops,no_grad
+from mindnlp.mindnlp.core.nn import functional as F
 from ...activations import ACT2FN,get_activation
 from ...modeling_outputs import (
     BaseModelOutput,
@@ -36,7 +36,7 @@ from ....utils import (
     DUMMY_MASK,
     # add_start_docstrings,
     # add_start_docstrings_to_model_forward,
-    # is_torch_fx_proxy,
+    # is_mindspore_fx_proxy,
     logging,
     #replace_return_docstrings,
 )
@@ -202,7 +202,7 @@ class Pix2StructVisionAttention(nn.Module):
         scores = ops.max(scores, mindspore.tensor(ops.finfo(scores.dtype).min))
 
         # (batch_size, n_heads, seq_length, key_length)
-        attn_weights = nn.functional.softmax(scores, dim=-1, dtype=ops.float32).type_as(scores)
+        attn_weights = F.softmax(scores, dim=-1, dtype=ops.float32).type_as(scores)
 
         # (batch_size, n_heads, seq_length, key_length)
         attn_weights = nn.functional.dropout(attn_weights, p=self.dropout, training=self.training)
@@ -479,14 +479,14 @@ class Pix2StructPreTrainedModel(PreTrainedModel):
             )
 
         # shift inputs to the right
-        if is_torch_fx_proxy(input_ids):
-            # Item assignment is not supported natively for proxies.
-            shifted_input_ids = ops.full(input_ids.shape[:-1] + (1,), decoder_start_token_id)
-            shifted_input_ids = ops.cat([shifted_input_ids, input_ids[..., :-1]], dim=-1)
-        else:
-            shifted_input_ids = input_ids.new_zeros(input_ids.shape)
-            shifted_input_ids[..., 1:] = input_ids[..., :-1].clone()
-            shifted_input_ids[..., 0] = decoder_start_token_id
+        # if is_torch_fx_proxy(input_ids):
+        #     # Item assignment is not supported natively for proxies.
+        #     shifted_input_ids = ops.full(input_ids.shape[:-1] + (1,), decoder_start_token_id)
+        #     shifted_input_ids = ops.cat([shifted_input_ids, input_ids[..., :-1]], dim=-1)
+        # else:
+        shifted_input_ids = input_ids.new_zeros(input_ids.shape)
+        shifted_input_ids[..., 1:] = input_ids[..., :-1].clone()
+        shifted_input_ids[..., 0] = decoder_start_token_id
 
         if pad_token_id is None:
             raise ValueError("self.model.config.pad_token_id has to be defined.")
@@ -595,7 +595,7 @@ class Pix2StructVisionModel(Pix2StructPreTrainedModel):
         >>> image = Image.open(requests.get(url, stream=True).raw)
 
         >>> inputs = image_processor(images=image, return_tensors="pt")
-        >>> with ops.no_grad():
+        >>> with no_grad():
         ...     outputs = model(**inputs)
 
         >>> last_hidden_states = outputs.last_hidden_state
@@ -887,7 +887,7 @@ class Pix2StructTextAttention(nn.Module):
 
         scores += position_bias_masked
         # (batch_size, n_heads, seq_length, key_length)
-        attn_weights = nn.functional.softmax(scores.float(), dim=-1).type_as(scores)
+        attn_weights = F.softmax(scores.float(), dim=-1).type_as(scores)
 
         # (batch_size, n_heads, seq_length, key_length)
         attn_weights = nn.functional.dropout(attn_weights, p=self.dropout, training=self.training)
